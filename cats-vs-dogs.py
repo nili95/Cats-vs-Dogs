@@ -118,17 +118,18 @@ class Net(Module):
     def __init__(self):
         super(Net, self).__init__()
 
-        self.cnn_layers = Sequential(
+        self.cnn_layers= Sequential(
             # Defining a 2D convolution layer
             Conv2d(1, 4, kernel_size=3, stride=1, padding=1),
             BatchNorm2d(4),
             ReLU(inplace=True),
             MaxPool2d(kernel_size=2, stride=2),
             # Defining another 2D convolution layer
+            #self.conv2 = Sequential
             Conv2d(4, 4, kernel_size=3, stride=1, padding=1),
             BatchNorm2d(4),
             ReLU(inplace=True),
-            MaxPool2d(kernel_size=2, stride=2),
+            MaxPool2d(kernel_size=2, stride=2)
         )
         
         self.linear_layers = Sequential(
@@ -143,7 +144,16 @@ class Net(Module):
         x = x.view(x.size(0), -1)
         x = self.linear_layers(x)
         return x
-    
+        '''
+        per_out=[] 
+        x=self.conv1(x)
+        per_out.append(x) # conv1
+        x=self.conv2(x)
+        per_out.append(x) # conv2
+        x=x.view(x.size(0),-1)
+        output=self.linear_layers(x)
+        return output,per_out
+        '''
 
 # defining the model
 model = Net()
@@ -159,6 +169,21 @@ if torch.cuda.is_available():
 summary(model,(1,100,100))
  
 print(model)
+
+'''
+kernel=model.cnn_layers[0].weight.data.clone()
+print(kernel.shape)
+
+plt.figure()
+plt.imshow(kernel[0,0,:,:])
+plt.show()
+
+plt.figure(1,kernel.shape[0])
+for i in range(kernel.shape[0]):
+    plt.subplot(1,4,i+1)
+    plt.imshow(kernel[i,0,:,:])
+plt.show()    
+'''
 
 def train(epoch):
     model.train()
@@ -197,9 +222,15 @@ def train(epoch):
     if epoch%2 == 0:
         # printing the validation loss
         print('Epoch : ',epoch+1, '\t', 'loss :', loss_val)
+    
+    '''
+    conv1=model(x_train)[1][0]
+    conv2=model(x_train)[1][1]
+    return conv1, conv2
+    '''
         
 # defining the number of epochs
-n_epochs = 25
+n_epochs = 15
 # empty list to store training losses
 train_losses = []
 # empty list to store validation losses
@@ -208,19 +239,88 @@ val_losses = []
 for epoch in range(n_epochs):
     train(epoch)
 
+#conv1, conv2 =train(epoch)
+#conv1=model(x_train)[1][0]
+
+plt.figure()
+plt.plot(np.log(train_losses), c='blue',label='Training loss')
+plt.plot(np.log(val_losses), c='red',label='Validation loss')
+plt.xlabel('epoch',fontsize=14)
+plt.ylabel('log(loss)',fontsize=14)
+plt.legend()
+#plt.show()
+
+plt.figure()
+plt.plot(train_losses, c='blue',linewidth=2,label='Training loss')
+plt.plot(val_losses, c='red',linewidth=2,label='Validation loss')
+plt.xlabel('epoch',fontsize=14)
+plt.ylabel('Loss',fontsize=14)
+plt.legend()
+plt.show()
+
+with torch.no_grad():
+    output = model(train_x)
+    
+softmax = torch.exp(output).cpu()
+prob = list(softmax.numpy())
+predictions = np.argmax(prob, axis=1)
+
+# accuracy on training set
+accuracy_score(train_y, predictions)
+
+#accuracy on test data
+with torch.no_grad():
+    output = model(val_x)
+
+softmax = torch.exp(output).cpu()
+prob = list(softmax.numpy())
+predictions = np.argmax(prob, axis=1)
+
+# accuracy on validation set
+accuracy_score(val_y, predictions)
 
 
 
+test_path = 'Z:/inhouse/nili/ML/archive/200_test/'
 
+x_test, y_test = create_data(test_path)
 
+x_test=np.array(x_test)
+y_test=np.array(y_test)
 
+#show some plot of the gray scale images
+i = 0
+plt.figure(figsize=(10,10))
+plt.subplot(221), plt.imshow(x_test[i], cmap='gray')
+plt.subplot(222), plt.imshow(x_test[i+25], cmap='gray')
+plt.subplot(223), plt.imshow(x_test[i+50], cmap='gray')
+plt.subplot(224), plt.imshow(x_test[i+75], cmap='gray')
+plt.show()
 
+test_x = x_test.reshape(400, 1, 100, 100)
+test_x  = torch.from_numpy(test_x)
 
+# converting the target into torch format
+test_y = torch.from_numpy(y_test)
 
+with torch.no_grad():
+    output = model(test_x)
 
+softmax = torch.exp(output).cpu()
+prob = list(softmax.numpy())
+predictions = np.argmax(prob, axis=1)
+accuracy_score(y_test, predictions)
 
+err_rate=(abs(predictions-y_test).sum()/(2*sum(abs(y_test))))
+print(err_rate)
 
+i=0
+print(predictions[i],predictions[i+25],predictions[i+50],predictions[i+75])
 
+sample_submission['label'] = predictions
+sample_submission.head()
+
+'''
 train_transform = torchvision.transforms.Compose([
     transforms.Resize((224,224)),
         transforms.RandomAffine(0, shear=10, scale=(0.8,1.2)),
@@ -288,4 +388,4 @@ for i, img in enumerate(img_list):
                                                             100*pred_probs[i,1]))
     ax.imshow(img)
 
-
+'''
